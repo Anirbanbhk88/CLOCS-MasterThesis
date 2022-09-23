@@ -12,7 +12,7 @@ from google.protobuf import text_format
 from tensorboardX import SummaryWriter
 import sys
 #append path of CLOCS source code
-sys.path.append('/private_shared/CLOCS_Source_Code/Common_Code/CLOCs-master/')
+sys.path.append('/private_shared/CLOCS_Source_Code/Common_Code/CLOCS-MasterThesis/CLOCs-master/')
 #print(sys.modules)
 import torchplus
 import second.data.kitti_common as kitti
@@ -190,7 +190,7 @@ def train(config_path,
     dataloader = torch.utils.data.DataLoader(
         dataset,
         batch_size=input_cfg.batch_size,
-        shuffle=True,
+        shuffle=False,
         num_workers=input_cfg.num_workers,
         pin_memory=False,
         collate_fn=merge_second_batch,
@@ -1074,11 +1074,11 @@ def predict_v2(net,example, preds_dict):
 if __name__ == '__main__':
     print('im here')
     ###########for debug in vscode###########
-    # print(sys.argv)
-    # train(config_path= sys.argv[1], model_dir = sys.argv[2], pickle_result=False)
+    print(sys.argv)
+    train(config_path= sys.argv[1], model_dir = sys.argv[2], pickle_result=False)
     #evaluate(config_path= sys.argv[1], model_dir = sys.argv[2], pickle_result=False)
     #########################################
 
     ############for running in Go-docker######
-    fire.Fire()
+    #fire.Fire()
     ##########################################

@@ -23,9 +23,10 @@ def merge_second_batch(batch_list, _unused=False):
     example_merged = defaultdict(list)
     count = 0
     for example in batch_list:
-        count = count +1
-        for k, v in example.items():
-            example_merged[k].append(v)
+        for batch_example in example:
+            count = count +1
+            for k, v in batch_example.items():
+                example_merged[k].append(v)
     count = 0
     ret = {}
     example_merged.pop("num_voxels")

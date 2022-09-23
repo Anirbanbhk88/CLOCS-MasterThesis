@@ -179,6 +179,70 @@ def build_stage2_training(boxes, query_boxes, criterion, scores_3d, scores_2d, d
         ind_max = ind
     return overlaps, tensor_index, ind
 
+# Anirban added to build the IOU b/w grid cells and 2D/3D bboxes, to be used for LSTM training
+@numba.jit(nopython=True,parallel=True)
+def build_LSTM_stage_training(boxes, grid_boxes, criterion, scores):
+    N = boxes.shape[0] #70400 shape of BBoxes(2D/3D)
+    K = grid_boxes.shape[0] #18 rows of grids
+    M = grid_boxes.shape[1] #5 cols of grids
+    max_num = 900000
+    ind=0
+    ind_max = ind
+
+    for k in range(K):
+        for m in range(M):
+            qbox_area = ((grid_boxes[k, m, 2] - grid_boxes[k, m, 0]) *
+                        (grid_boxes[k, m, 3] - grid_boxes[k, m, 1]))
+            for n in range(N):
+                iw = (min(boxes[n, 2], grid_boxes[k, m, 2]) -
+                    max(boxes[n, 0], grid_boxes[k, m, 0]))
+                if iw > 0:
+                    ih = (min(boxes[n, 3], grid_boxes[k, m, 3]) -
+                        max(boxes[n, 1], grid_boxes[k, m, 1]))
+                    if ih > 0:
+                        if criterion == -1:
+                            ua = (
+                                (boxes[n, 2] - boxes[n, 0]) *
+                                (boxes[n, 3] - boxes[n, 1]) + qbox_area - iw * ih)
+                        elif criterion == 0:
+                            ua = ((boxes[n, 2] - boxes[n, 0]) *
+                                (boxes[n, 3] - boxes[n, 1]))
+                        elif criterion == 1:
+                            ua = qbox_area
+                        else:
+                            ua = 1.0
+                        iou = iw * ih / ua
+                        #overlaps[ind,0] = iw * ih / ua
+                        #overlaps[ind,1] = scores_3d[n,0]
+                        #overlaps[ind,2] = scores_2d[k,0]
+                        #overlaps[ind,3] = dis_to_lidar_3d[n,0]
+                        grid_boxes[k, m, 4] = max(grid_boxes[k, m, 4], iou) # assign the max iou b/w the grid box and bboxes incase of multiple overlaps
+                        grid_boxes[k, m, 5] = max(grid_boxes[k, m, 5], scores[n,0]) # assign the max scores b/w the grid box and bboxes incase of multiple overlaps
+                        #tensor_index[ind,0] = k
+                        #tensor_index[ind,1] = n
+                        #ind = ind+1
+
+                    # elif k==K-1:
+                    #     #overlaps[ind,0] = -10
+                    #     #overlaps[ind,1] = scores_3d[n,0]
+                    #     #overlaps[ind,2] = -10
+                    #     #overlaps[ind,3] = dis_to_lidar_3d[n,0]
+                    #     tensor_index[ind,0] = k
+                    #     tensor_index[ind,1] = n
+                    #     ind = ind+1
+                # elif k==K-1:
+                #     overlaps[ind,0] = -10
+                #     overlaps[ind,1] = scores_3d[n,0]
+                #     overlaps[ind,2] = -10
+                #     #overlaps[ind,3] = dis_to_lidar_3d[n,0]
+                #     tensor_index[ind,0] = k
+                #     tensor_index[ind,1] = n
+                #     ind = ind+1
+    if ind > ind_max:
+        ind_max = ind
+    # return overlaps, tensor_index, ind
+    return grid_boxes
+
 
 # pang added to build the tensor for the second stage of training, added july 13 2019
 @numba.jit(nopython=True, parallel=True)
