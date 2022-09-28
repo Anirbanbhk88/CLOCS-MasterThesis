@@ -20,13 +20,13 @@ import cv2
 
 def merge_second_batch(batch_list, _unused=False):
     #print("~~~~~~~~what's in the batch_list",batch_list[2])
+    # batch_list = np.array(batch_list)
     example_merged = defaultdict(list)
     count = 0
     for example in batch_list:
-        for batch_example in example:
-            count = count +1
-            for k, v in batch_example.items():
-                example_merged[k].append(v)
+        count = count +1
+        for k, v in example.items():
+            example_merged[k].append(v)
     count = 0
     ret = {}
     example_merged.pop("num_voxels")

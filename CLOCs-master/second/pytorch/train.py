@@ -27,6 +27,7 @@ from second.utils.progress_bar import ProgressBar
 from second.pytorch.core import box_torch_ops
 from second.pytorch.core.losses import SigmoidFocalClassificationLoss
 from second.pytorch.models import fusion
+from second.pytorch.models import convlstm
 
 # from numba.core.errors import NumbaDeprecationWarning, NumbaPendingDeprecationWarning,NumbaPerformanceWarning,NumbaWarning
 # import warnings
@@ -142,9 +143,17 @@ def train(config_path,
     target_assigner = target_assigner_builder.build(target_assigner_cfg,
                                                     bv_range, box_coder)
     class_names = target_assigner.classes
+    grid_input_channels = 4
+    grid_seq_len = 4
+    grid_frame_size = [5, 18] # gride frame ht * width
+
+
     net = build_inference_net(config_path,model_dir)
     fusion_layer = fusion.fusion()
     fusion_layer.cuda()
+    conv_lstm = convlstm.ConvLSTM(input_dim=grid_input_channels, hidden_dim= grid_seq_len, kernel_size=(3,3), num_layers=2, 
+                                  frame_size=grid_frame_size, batch_first=True, bias=True, return_all_layers=True)
+    conv_lstm.cuda()
     # ############ restore parameters for fusion layer
     # print("load existing model for fusion layer")
     # torchplus.train.try_restore_latest_checkpoints(model_dir/"CLOCs_SecCas_pretrained", [fusion_layer])
@@ -256,8 +265,10 @@ def train(config_path,
                 #if str(example['image_idx'][0]) in ["0000", "0001"]:
                 example_torch = example_convert_to_torch(example, float_dtype)
                 batch_size = example["anchors"].shape[0]
-                all_3d_output_camera_dict, all_3d_output, top_predictions, fusion_input,tensor_index = net(example_torch,detection_2d_path)
-                d3_gt_boxes = example_torch["d3_gt_boxes"][0,:,:]
+                all_3d_output_camera_dict, all_3d_output, top_predictions, fusion_input,tensor_index, grid_tensor = net(example_torch,detection_2d_path)
+                #out_conv_lstm = conv_lstm(grid_tensor.cuda())
+                d3_gt_boxes = example_torch["d3_gt_boxes"][:,:,:]
+                #d3_gt_boxes = d3_gt_boxes.reshape(batch_size, d3_gt_boxes.shape[-1])
                 if d3_gt_boxes.shape[0] == 0:
                     target_for_fusion = np.zeros((1,70400,1))
                     positives = torch.zeros(1,70400).type(torch.float32).cuda()

@@ -384,35 +384,38 @@ class VoxelNet(nn.Module):
             }
         else:
             self.start_timer("predict")
-            img_idx = example['image_idx'][0]
-            detection_2d_result_path = pathlib.Path(detection_2d_path)
-            detection_2d_file_name = f"{detection_2d_result_path}/{kitti.get_image_index_str(img_idx)}.txt"
-            with open(detection_2d_file_name, 'r') as f:
-                lines = f.readlines()
-            content = [line.strip().split(' ') for line in lines]
-            predicted_class = np.array([x[0] for x in content],dtype='object')
-            if os.path.basename(detection_2d_result_path) == 'car':
-                predicted_class_index = np.where(predicted_class=='Car')
-                score = np.array([float(x[15]) for x in content])  # 1000 is the score scale!!!
-            elif os.path.basename(detection_2d_result_path) == 'pedestrian':
-                predicted_class_index = np.where(predicted_class=='Pedestrian')
-                score = np.array([float(x[15]) for x in content])#/1000  # 1000 is the score scale!!!
-            else:
-                predicted_class_index = np.where(predicted_class=='Cyclist')
-                score = np.array([float(x[15]) for x in content])#/1000  # 1000 is the score scale!!!
-            detection_result = np.array([[float(info) for info in x[4:8]] for x in content]).reshape(-1, 4)
-            
-            f_detection_result=np.append(detection_result,score.reshape(-1,1),1)
-            middle_predictions=f_detection_result[predicted_class_index,:].reshape(-1,5)
-            top_predictions=middle_predictions[np.where(middle_predictions[:,4]>=-100)]
-            res, iou_test, tensor_index = self.train_stage_2(example, preds_dict,top_predictions)
+            top_predictions_list = []
+            for i in range(len(example['image_idx'])): #Anirban added forloop for batch of samples
+                img_idx = example['image_idx'][i]#example['image_idx'][0]
+                detection_2d_result_path = pathlib.Path(detection_2d_path)
+                detection_2d_file_name = f"{detection_2d_result_path}/{kitti.get_image_index_str(img_idx)}.txt"
+                with open(detection_2d_file_name, 'r') as f:
+                    lines = f.readlines()
+                content = [line.strip().split(' ') for line in lines]
+                predicted_class = np.array([x[0] for x in content],dtype='object')
+                if os.path.basename(detection_2d_result_path) == 'car':
+                    predicted_class_index = np.where(predicted_class=='Car')
+                    score = np.array([float(x[15]) for x in content])  # 1000 is the score scale!!!
+                elif os.path.basename(detection_2d_result_path) == 'pedestrian':
+                    predicted_class_index = np.where(predicted_class=='Pedestrian')
+                    score = np.array([float(x[15]) for x in content])#/1000  # 1000 is the score scale!!!
+                else:
+                    predicted_class_index = np.where(predicted_class=='Cyclist')
+                    score = np.array([float(x[15]) for x in content])#/1000  # 1000 is the score scale!!!
+                detection_result = np.array([[float(info) for info in x[4:8]] for x in content]).reshape(-1, 4)
+                
+                f_detection_result=np.append(detection_result,score.reshape(-1,1),1)
+                middle_predictions=f_detection_result[predicted_class_index,:].reshape(-1,5)
+                top_predictions=middle_predictions[np.where(middle_predictions[:,4]>=-100)]
+                top_predictions_list.append(top_predictions)
+            res, iou_test, tensor_index, grid_tensor = self.train_stage_2(example, preds_dict,top_predictions_list)
             self.end_timer("predict")
 
-            return res, preds_dict, top_predictions, iou_test, tensor_index
+            return res, preds_dict, top_predictions, iou_test, tensor_index, grid_tensor
 
 
 
-    def train_stage_2(self, example, preds_dict,top_predictions):
+    def train_stage_2(self, example, preds_dict,top_predictions_list):
         t = time.time()
         batch_size = example['anchors'].shape[0]
         batch_anchors = example["anchors"].view(batch_size, -1, 7)
@@ -446,9 +449,12 @@ class VoxelNet(nn.Module):
             batch_dir_preds = [None] * batch_size
 
         predictions_dicts = []
-        for box_preds, cls_preds, dir_preds, rect, Trv2c, P2, img_idx, a_mask, image_shape in zip(
+        non_empty_iou_test_tensor_batch = []
+        non_empty_tensor_index_tensor_batch = []
+        combined_grid_tensor_batch = []
+        for box_preds, cls_preds, dir_preds, rect, Trv2c, P2, img_idx, a_mask, image_shape, top_predictions, batch_sample_idx in zip(
                 batch_box_preds, batch_cls_preds, batch_dir_preds, batch_rect,
-                batch_Trv2c, batch_P2, batch_imgidx, batch_anchors_mask, batch_image_shape):
+                batch_Trv2c, batch_P2, batch_imgidx, batch_anchors_mask, batch_image_shape, top_predictions_list, range(batch_size)):
             if a_mask is not None:
                 box_preds = box_preds[a_mask]
                 cls_preds = cls_preds[a_mask]
@@ -552,20 +558,33 @@ class VoxelNet(nn.Module):
                 non_empty_iou_test_tensor = iou_test_tensor[:,:,:,:max_num]
                 non_empty_tensor_index_tensor = tensor_index_tensor[:max_num,:]
 
+            non_empty_iou_test_tensor_batch.append(non_empty_iou_test_tensor)  #Anirban
+            non_empty_tensor_index_tensor_batch.append(non_empty_tensor_index_tensor) #Anirban
+
             #Anirban create map of image grid and 2D detections
-            grid = self.create_image_grids(batch_image_shape)
-            grid = np.array(grid, dtype= box_2d_preds.detach().cpu().numpy().dtype)
-            grid = np.insert(grid, 4, 0, axis= -1) # initialize 0 for IOU at the last index of grid tensors
-            grid = np.insert(grid, 5, 0, axis= -1) # initialize 0 for detection scores at the last index of grid tensors
-            grid_map_2D = grid.copy()
-            grid_map_3D = grid.copy()
+            #grid = self.create_image_grids(batch_image_shape, type=box_2d_preds.detach().cpu().numpy().dtype)
             
+            grid_map_2D = self.create_image_grids(batch_image_shape, type=box_2d_preds.detach().cpu().numpy().dtype)#grid.copy() #18x5x6 dim nparray
+            grid_map_3D = self.create_image_grids(batch_image_shape, type=box_2d_preds.detach().cpu().numpy().dtype)#grid.copy() #18x5x6 dim nparray
+
             grid_map_2D = se.build_LSTM_stage_training(box_2d_detector, grid_map_2D, -1, box_2d_scores)
             grid_map_3D = se.build_LSTM_stage_training(box_2d_preds.detach().cpu().numpy(), grid_map_3D, -1, final_scores.detach().cpu().numpy())
+            combined_grid = np.concatenate((grid_map_2D[:,:, 4:], grid_map_3D[:, :, 4:]), axis=2) #merge the 2 grid's ios and score features columnwise
+            combined_grid_tensor = torch.FloatTensor(combined_grid) # 18x5x4 dim tensor
+            combined_grid_tensor = combined_grid_tensor.view(4, 5, 18)
 
-        return predictions_dicts, non_empty_iou_test_tensor, non_empty_tensor_index_tensor
+            combined_grid_tensor_batch.append(combined_grid_tensor)#Anirban
+
+        #Anirban: return predictions_dicts, non_empty_iou_test_tensor, non_empty_tensor_index_tensor
+        non_empty_iou_test_tensor_batch = torch.cat(non_empty_iou_test_tensor_batch)
+        non_empty_tensor_index_tensor_batch = torch.stack(non_empty_tensor_index_tensor_batch)
+        combined_grid_tensor_batch = torch.stack(combined_grid_tensor_batch) # stacking all the tensors per batch to create Tensor: (8, 4, 5, 18) batch x chnanels x ht x wt
+        #combined_grid_tensor_batch = combined_grid_tensor_batch.view(2, 4, 4, 5, 18) # tensor reshape to shape(2, 4, 4, 5, 18) batch x seq x chnanels x ht x wt
+
+        return predictions_dicts, non_empty_iou_test_tensor_batch, non_empty_tensor_index_tensor_batch, combined_grid_tensor_batch
+
     #Anirban
-    def create_image_grids(self, batch_image_shape):
+    def create_image_grids(self, batch_image_shape, type):
         """generate 18x5 image grids each grids of equal size 69px by 75px
 
         Args:
@@ -577,9 +596,11 @@ class VoxelNet(nn.Module):
         grid_width = img_width//18
         grid_height = img_height//5
         left, top, right, bottom = 0, 0, grid_width, grid_height 
-        grid_list= [[[(left+ grid_width*i), (top+ grid_height*j), (right+ grid_width*i), (bottom+ grid_height*j)]  for j in range(5)] for i in range(18)]
-        
-        return grid_list
+        # create a grid of (left, top, right, bottom, IOU, score) # IOU and score initialized to 0
+        grid= [[[(left+ grid_width*i), (top+ grid_height*j), (right+ grid_width*i), (bottom+ grid_height*j), 0, 0]  for j in range(5)] for i in range(18)] 
+        grid = np.array(grid, dtype= type)
+
+        return grid
 
 
 

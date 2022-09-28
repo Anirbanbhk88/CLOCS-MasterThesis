@@ -11,21 +11,22 @@ class DatasetWrapper(Dataset):
 
     def __init__(self, dataset):
         self._dataset = dataset
-        self.seq_list = np.empty([4,2], dtype=object)
+        self.time_steps = 4
+        self.batch_size_per_time_Step = 2
+        #self.seq_list = np.empty([self.time_steps, self.batch_size_per_time_Step], dtype=object)
         self.last_item_idx = 0
 
     def __len__(self):
         return len(self._dataset)
 
     def __getitem__(self, idx):
-        self.last_item_idx = idx * 2 # 2 is batch_size
-        self.seq_list[idx, 0] = self._dataset[self.last_item_idx]
-        self.last_item_idx +=1
-        self.seq_list[idx, 1] = self._dataset[self.last_item_idx]
+        # self.last_item_idx = idx * self.batch_size_per_time_Step # 2 is batch_size per time step
+        # self.seq_list[idx, 0] = self._dataset[self.last_item_idx]
+        # self.last_item_idx +=1
+        # self.seq_list[idx, 1] = self._dataset[self.last_item_idx]
+        # return self.seq_list[idx]
 
-        return self.seq_list[idx]
-
-        #return self._dataset[idx]
+        return self._dataset[idx]
 
     @property
     def dataset(self):
