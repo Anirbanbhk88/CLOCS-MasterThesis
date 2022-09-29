@@ -576,7 +576,7 @@ class VoxelNet(nn.Module):
             combined_grid_tensor_batch.append(combined_grid_tensor)#Anirban
 
         #Anirban: return predictions_dicts, non_empty_iou_test_tensor, non_empty_tensor_index_tensor
-        non_empty_iou_test_tensor_batch = torch.cat(non_empty_iou_test_tensor_batch)
+        non_empty_iou_test_tensor_batch = torch.stack(non_empty_iou_test_tensor_batch)
         non_empty_tensor_index_tensor_batch = torch.stack(non_empty_tensor_index_tensor_batch)
         combined_grid_tensor_batch = torch.stack(combined_grid_tensor_batch) # stacking all the tensors per batch to create Tensor: (8, 4, 5, 18) batch x chnanels x ht x wt
         #combined_grid_tensor_batch = combined_grid_tensor_batch.view(2, 4, 4, 5, 18) # tensor reshape to shape(2, 4, 4, 5, 18) batch x seq x chnanels x ht x wt

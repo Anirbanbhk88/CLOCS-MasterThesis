@@ -11,10 +11,10 @@ class DatasetWrapper(Dataset):
 
     def __init__(self, dataset):
         self._dataset = dataset
-        self.time_steps = 4
-        self.batch_size_per_time_Step = 2
+        #self.time_steps = 4
+        #self.batch_size_per_time_Step = 2
         #self.seq_list = np.empty([self.time_steps, self.batch_size_per_time_Step], dtype=object)
-        self.last_item_idx = 0
+        #self.last_item_idx = 0
 
     def __len__(self):
         return len(self._dataset)

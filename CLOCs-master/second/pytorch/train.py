@@ -267,69 +267,70 @@ def train(config_path,
                 batch_size = example["anchors"].shape[0]
                 all_3d_output_camera_dict, all_3d_output, top_predictions, fusion_input,tensor_index, grid_tensor = net(example_torch,detection_2d_path)
                 #out_conv_lstm = conv_lstm(grid_tensor.cuda())
-                d3_gt_boxes = example_torch["d3_gt_boxes"][:,:,:]
-                #d3_gt_boxes = d3_gt_boxes.reshape(batch_size, d3_gt_boxes.shape[-1])
-                if d3_gt_boxes.shape[0] == 0:
-                    target_for_fusion = np.zeros((1,70400,1))
-                    positives = torch.zeros(1,70400).type(torch.float32).cuda()
-                    negatives = torch.zeros(1,70400).type(torch.float32).cuda()
-                    negatives[:,:] = 1
-                else:
-                    d3_gt_boxes_camera = box_torch_ops.box_lidar_to_camera(
-                        d3_gt_boxes, example_torch['rect'][0,:], example_torch['Trv2c'][0,:])
-                    d3_gt_boxes_camera_bev = d3_gt_boxes_camera[:,[0,2,3,5,6]]
-                    ###### predicted bev boxes
-                    pred_3d_box = all_3d_output_camera_dict[0]["box3d_camera"]
-                    pred_bev_box = pred_3d_box[:,[0,2,3,5,6]]
-                    #iou_bev = bev_box_overlap(d3_gt_boxes_camera_bev.detach().cpu().numpy(), pred_bev_box.detach().cpu().numpy(), criterion=-1)
-                    iou_bev = d3_box_overlap(d3_gt_boxes_camera.detach().cpu().numpy(), pred_3d_box.squeeze().detach().cpu().numpy(), criterion=-1)
-                    iou_bev_max = np.amax(iou_bev,axis=0)
-                    #print(np.max(iou_bev_max))
-                    basename_config = os.path.basename(config_path)
-                    if basename_config == 'car.fhd.config':
-                        target_for_fusion = ((iou_bev_max >= 0.7)*1).reshape(1,-1,1)
-
-                        positive_index = ((iou_bev_max >= 0.7)*1).reshape(1,-1)
-                        positives = torch.from_numpy(positive_index).type(torch.float32).cuda()
-                        negative_index = ((iou_bev_max <= 0.5)*1).reshape(1,-1)
-                        negatives = torch.from_numpy(negative_index).type(torch.float32).cuda()
-
+                target_for_fusion_per_batch = []
+                positives_per_batch = []
+                negatives_per_batch = []
+                cls_losses_reduced = 0
+                for i in range(batch_size):
+                    d3_gt_boxes = example_torch["d3_gt_boxes"][i,:,:]
+                    #d3_gt_boxes = d3_gt_boxes.reshape(batch_size, d3_gt_boxes.shape[-1])
+                    if d3_gt_boxes.shape[0] == 0:
+                        target_for_fusion = np.zeros((1,70400,1))
+                        positives = torch.zeros(1,70400).type(torch.float32).cuda()
+                        negatives = torch.zeros(1,70400).type(torch.float32).cuda()
+                        negatives[:,:] = 1
                     else:
-                        target_for_fusion = ((iou_bev_max >= 0.5)*1).reshape(1,-1,1)
+                        d3_gt_boxes_camera = box_torch_ops.box_lidar_to_camera(
+                            d3_gt_boxes, example_torch['rect'][i,:], example_torch['Trv2c'][i,:])
+                        d3_gt_boxes_camera_bev = d3_gt_boxes_camera[:,[0,2,3,5,6]]
+                        ###### predicted bev boxes
+                        pred_3d_box = all_3d_output_camera_dict[i]["box3d_camera"]
+                        pred_bev_box = pred_3d_box[:,[0,2,3,5,6]]
+                        #iou_bev = bev_box_overlap(d3_gt_boxes_camera_bev.detach().cpu().numpy(), pred_bev_box.detach().cpu().numpy(), criterion=-1)
+                        iou_bev = d3_box_overlap(d3_gt_boxes_camera.detach().cpu().numpy(), pred_3d_box.squeeze().detach().cpu().numpy(), criterion=-1)
+                        iou_bev_max = np.amax(iou_bev,axis=0)
+                        #print(np.max(iou_bev_max))
+                        basename_config = os.path.basename(config_path)
+                        if basename_config == 'car.fhd.config':
+                            target_for_fusion = ((iou_bev_max >= 0.7)*1).reshape(1,-1,1)
 
-                        positive_index = ((iou_bev_max >= 0.5)*1).reshape(1,-1)
-                        positives = torch.from_numpy(positive_index).type(torch.float32).cuda()
-                        negative_index = ((iou_bev_max <= 0.25)*1).reshape(1,-1)
-                        negatives = torch.from_numpy(negative_index).type(torch.float32).cuda()
+                            positive_index = ((iou_bev_max >= 0.7)*1).reshape(1,-1)
+                            positives = torch.from_numpy(positive_index).type(torch.float32).cuda()
+                            negative_index = ((iou_bev_max <= 0.5)*1).reshape(1,-1)
+                            negatives = torch.from_numpy(negative_index).type(torch.float32).cuda()
 
-                #####Anirban- Save output of just the SECOND n/w before the fusion#########
-                # dt_annos = []
-                # dt_annos += predict_to_kitti_label(
-                # all_3d_output_camera_dict, example, class_names, center_limit_range,
-                # model_cfg.lidar_input)
-                # result_path_step = result_path / f"step_{net.get_global_step()}"
-                # result_path_step.mkdir(parents=True, exist_ok=True)
-                # kitti_anno_to_label_file(dt_annos, result_path_step)
-                # break
+                        else:
+                            target_for_fusion = ((iou_bev_max >= 0.5)*1).reshape(1,-1,1)
 
-                ###########################################################################
+                            positive_index = ((iou_bev_max >= 0.5)*1).reshape(1,-1)
+                            positives = torch.from_numpy(positive_index).type(torch.float32).cuda()
+                            negative_index = ((iou_bev_max <= 0.25)*1).reshape(1,-1)
+                            negatives = torch.from_numpy(negative_index).type(torch.float32).cuda()
+                        
 
-                cls_preds,flag = fusion_layer(fusion_input.cuda(),tensor_index.cuda())
-                one_hot_targets = torch.from_numpy(target_for_fusion).type(torch.float32).cuda()
+                #target_for_fusion_per_batch = torch.stack(target_for_fusion_per_batch)
+                #positives_per_batch = torch.stack(positives_per_batch)
+                #negatives_per_batch = torch.stack(negatives_per_batch)
 
-                negative_cls_weights = negatives.type(torch.float32) * 1.0
-                cls_weights = negative_cls_weights + 1.0 * positives.type(torch.float32)
-                pos_normalizer = positives.sum(1, keepdim=True).type(torch.float32)
-                cls_weights /= torch.clamp(pos_normalizer, min=1.0)
-                if flag==1:
-                    cls_losses = focal_loss._compute_loss(cls_preds, one_hot_targets, cls_weights.cuda())  # [N, M]
-                    cls_losses_reduced = cls_losses.sum()/example_torch['labels'].shape[0]
+                    cls_preds,flag = fusion_layer(fusion_input[i].cuda(),tensor_index[i].cuda())
+                    one_hot_targets = torch.from_numpy(target_for_fusion).type(torch.float32).cuda()
+                    negative_cls_weights = negatives.type(torch.float32) * 1.0
+                    cls_weights = negative_cls_weights + 1.0 * positives.type(torch.float32)
+                    pos_normalizer = positives.sum(1, keepdim=True).type(torch.float32)
+                    cls_weights /= torch.clamp(pos_normalizer, min=1.0)
+                    if flag==1:
+                        cls_losses = focal_loss._compute_loss(cls_preds, one_hot_targets, cls_weights.cuda())  # [N, M]
+                        cls_losses_reduced += cls_losses.sum()/(example_torch['labels'].shape[0]/batch_size)
+
+
+                if flag == 1:
                     cls_loss_sum = cls_loss_sum + cls_losses_reduced
                     if train_cfg.enable_mixed_precision:
                         loss *= loss_scale
                     cls_losses_reduced.backward()
                     mixed_optimizer.step()
                     mixed_optimizer.zero_grad()
+
                 net.update_global_step()
                 step_time = (time.time() - t)
                 t = time.time()
@@ -1087,7 +1088,7 @@ if __name__ == '__main__':
     ###########for debug in vscode###########
     print(sys.argv)
     train(config_path= sys.argv[1], model_dir = sys.argv[2], pickle_result=False)
-    #evaluate(config_path= sys.argv[1], model_dir = sys.argv[2], pickle_result=False)
+    #evaluate(config_path= sys.argv[1], model_dir = sys.argv[2], pickle_result=False, batch_size=8)
     #########################################
 
     ############for running in Go-docker######
