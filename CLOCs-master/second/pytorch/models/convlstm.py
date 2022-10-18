@@ -29,9 +29,9 @@ class ConvLSTMCell(nn.Module):
         self.padding = kernel_size[0] // 2, kernel_size[1] // 2
         self.bias = bias
         # Initialize weights for Hadamard Products
-        self.W_ci = nn.Parameter(torch.zeros(self.hidden_dim, *frame_size)) #nn.Parameter(torch.Tensor(self.hidden_dim, *frame_size))
-        self.W_co = nn.Parameter(torch.zeros(self.hidden_dim, *frame_size)) #nn.Parameter(torch.Tensor(self.hidden_dim, *frame_size))
-        self.W_cf = nn.Parameter(torch.zeros(self.hidden_dim, *frame_size)) #nn.Parameter(torch.Tensor(self.hidden_dim, *frame_size))
+        self.W_ci = nn.Parameter(torch.rand(self.hidden_dim, *frame_size)) #nn.Parameter(torch.Tensor(self.hidden_dim, *frame_size))
+        self.W_co = nn.Parameter(torch.rand(self.hidden_dim, *frame_size)) #nn.Parameter(torch.Tensor(self.hidden_dim, *frame_size))
+        self.W_cf = nn.Parameter(torch.rand(self.hidden_dim, *frame_size)) #nn.Parameter(torch.Tensor(self.hidden_dim, *frame_size))
 
         self.conv = nn.Conv2d(in_channels=self.input_dim + self.hidden_dim,
                               out_channels=4 * self.hidden_dim,
@@ -46,9 +46,9 @@ class ConvLSTMCell(nn.Module):
 
         combined_conv = self.conv(combined)
         cc_i, cc_f, cc_o, cc_g = torch.split(combined_conv, self.hidden_dim, dim=1)
-        i = torch.sigmoid(cc_i + self.W_ci * c_cur)
-        f = torch.sigmoid(cc_f + self.W_cf * c_cur)
-        o = torch.sigmoid(cc_o + self.W_co * c_cur)
+        i = torch.sigmoid(cc_i + self.W_ci * c_cur) #torch.sigmoid(cc_i)
+        f = torch.sigmoid(cc_f + self.W_cf * c_cur) #torch.sigmoid(cc_f)
+        o = torch.sigmoid(cc_o + self.W_co * c_cur) #torch.sigmoid(cc_o)
         g = torch.tanh(cc_g)
 
         c_next = f * c_cur + i * g
