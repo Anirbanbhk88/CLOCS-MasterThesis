@@ -11,8 +11,8 @@
             "program": "${workspaceFolder}/CLOCs-master/second/pytorch/train.py",
             "console": "integratedTerminal",
             "justMyCode": true,
-            "args": ["/private_shared/CLOCS_Source_Code/Common_Code/CLOCS-MasterThesis/CLOCs-master/second/configs/pedestrian.fhd.config", 
-            "/private_shared/CLOCS_Source_Code/Common_Code/CLOCS-MasterThesis/CLOCs-master/model_dir/pedestrian_Train_LSTMClocs_Second-PretrainedOnObjDetDS_trackingDS_v1"
+            "args": ["/private_shared/CLOCs_Source_Code/Common_Code/CLOCS-MasterThesis/CLOCs-master/second/configs/pedestrian.fhd.config", 
+            "/private_shared/CLOCs_Source_Code/Common_Code/CLOCS-MasterThesis/CLOCs-master/model_dir/pedestrian_Train_LSTMClocs_Second-PretrainedOnObjDetDS_trackingDS_v4"
             ]
         }
     ]

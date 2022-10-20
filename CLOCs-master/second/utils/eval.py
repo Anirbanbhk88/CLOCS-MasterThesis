@@ -303,9 +303,9 @@ def add_grid_features_to_sparse_tensor(sparse_overlaps, tensor_indexes, lstm_gri
             lstm_grid_box = lstm_grid_box.view(4, -1) #reshape to (4,90)
             grid_tensor_2D_index = grid_tensor_2D_indexes[sample_idx]
             grid_tensor_3D_index = grid_tensor_3D_indexes[sample_idx]
-            lstm_feature_list_2D = lstm_grid_box[:2, grid_tensor_2D_index] # build_objects_LSTMfeature_list(lstm_grid_box, grid_tensor_2D_index)
+            lstm_feature_list_2D = lstm_grid_box[:2, grid_tensor_2D_index] 
             #lstm_feature_list_2D = torch.cat((lstm_feature_list_2D, torch.zeros((2, 1), dtype=lstm_feature_list_2D.dtype, device=lstm_feature_list_2D.device)), dim=-1)
-            lstm_feature_list_3D =  lstm_grid_box[2:, grid_tensor_3D_index] # build_objects_LSTMfeature_list(lstm_grid_box, grid_tensor_2D_index)
+            lstm_feature_list_3D =  lstm_grid_box[2:, grid_tensor_3D_index] 
             
             features_2D = lstm_feature_list_2D[:,tensor_index[:,0]]
             features_3D = lstm_feature_list_3D[:,tensor_index[:,1]]
@@ -317,9 +317,6 @@ def add_grid_features_to_sparse_tensor(sparse_overlaps, tensor_indexes, lstm_gri
         
     return new_sparse_tensors
                 
-def build_objects_LSTMfeature_list(lstm_grid_box, grid_index_tensor):
-    lstm_feature_list = lstm_grid_box[grid_index_tensor,:]
-    return lstm_feature_list
 
 
 

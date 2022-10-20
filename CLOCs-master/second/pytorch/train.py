@@ -12,7 +12,7 @@ from google.protobuf import text_format
 from tensorboardX import SummaryWriter
 import sys
 #append path of CLOCS source code
-sys.path.append('/private_shared/CLOCS_Source_Code/Common_Code/CLOCS-MasterThesis/CLOCs-master/')
+sys.path.append('/private_shared/CLOCs_Source_Code/Common_Code/CLOCS-MasterThesis/CLOCs-master/')
 #print(sys.modules)
 import torchplus
 import second.data.kitti_common as kitti
@@ -110,348 +110,6 @@ def build_inference_net(config_path,
     net.eval()
     return net
 
-# def train(config_path,
-#           model_dir,
-#           result_path=None,
-#           create_folder=False,
-#           display_step=50,
-#           summary_step=5,
-#           pickle_result=True,
-#           patchs=None):
-#     torch.manual_seed(3)
-#     np.random.seed(3)
-#     if create_folder:
-#         if pathlib.Path(model_dir).exists():
-#             model_dir = torchplus.train.create_folder(model_dir)
-#     patchs = patchs or []
-#     model_dir = pathlib.Path(model_dir)
-#     model_dir.mkdir(parents=True, exist_ok=True)
-#     if result_path is None:
-#         result_path = model_dir / 'results'
-#     config = pipeline_pb2.TrainEvalPipelineConfig()
-#     with open(config_path, "r") as f:
-#         proto_str = f.read()
-#         text_format.Merge(proto_str, config)
-#     input_cfg = config.train_input_reader
-#     eval_input_cfg = config.eval_input_reader
-#     model_cfg = config.model.second
-#     train_cfg = config.train_config
-#     detection_2d_path = config.train_config.detection_2d_path
-#     print("2d detection path:",detection_2d_path)
-#     center_limit_range = model_cfg.post_center_limit_range
-#     voxel_generator = voxel_builder.build(model_cfg.voxel_generator)
-#     bv_range = voxel_generator.point_cloud_range[[0, 1, 3, 4]]
-#     box_coder = box_coder_builder.build(model_cfg.box_coder)
-#     target_assigner_cfg = model_cfg.target_assigner
-#     target_assigner = target_assigner_builder.build(target_assigner_cfg,
-#                                                     bv_range, box_coder)
-#     class_names = target_assigner.classes
-#     grid_input_channels = 4
-#     grid_seq_len = 4
-#     grid_frame_size = [5, 18] # gride frame ht * width
-
-
-#     net = build_inference_net(config_path,model_dir)
-#     fusion_layer = fusion.fusion()
-#     fusion_layer.cuda()
-#     conv_lstm = convlstm.ConvLSTM(input_dim=grid_input_channels, hidden_dim= grid_seq_len, kernel_size=(3,3), num_layers=2, 
-#                                   frame_size=grid_frame_size, batch_first=True, bias=True, return_all_layers=False)
-#     conv_lstm.cuda()
-#     # ############ Anirban: restore parameters for fusion layer
-#     #print("load existing model for fusion layer")
-#     #torchplus.train.try_restore_latest_checkpoints(model_dir, [fusion_layer])
-#     ###############################
-    
-#     optimizer_cfg = train_cfg.optimizer
-#     if train_cfg.enable_mixed_precision:
-#         net.half()
-#         net.metrics_to_float()
-#         net.convert_norm_to_float(net)
-#     loss_scale = train_cfg.loss_scale_factor
-#     mixed_optimizer = optimizer_builder.build(optimizer_cfg, fusion_layer, mixed=train_cfg.enable_mixed_precision, loss_scale=loss_scale)
-#     optimizer = mixed_optimizer
-#     # must restore optimizer AFTER using MixedPrecisionWrapper
-#     torchplus.train.try_restore_latest_checkpoints(model_dir,
-#                                                    [mixed_optimizer])
-#     lr_scheduler = lr_scheduler_builder.build(optimizer_cfg, optimizer, train_cfg.steps)
-#     if train_cfg.enable_mixed_precision:
-#         float_dtype = torch.float16
-#     else:
-#         float_dtype = torch.float32
-    
-#     device = torch.device("cuda:0")
-#     ######################
-#     # PREPARE INPUT
-#     ######################
-
-#     dataset = input_reader_builder.build(
-#         input_cfg,
-#         model_cfg,
-#         training=True,
-#         voxel_generator=voxel_generator,
-#         target_assigner=target_assigner)
-#     eval_dataset = input_reader_builder.build(
-#         eval_input_cfg,
-#         model_cfg,
-#         training=True,   #if rhnning for test, here it needs to be False
-#         voxel_generator=voxel_generator,
-#         target_assigner=target_assigner)
-#     def _worker_init_fn(worker_id):
-#         time_seed = np.array(time.time(), dtype=np.int32)
-#         np.random.seed(time_seed + worker_id)
-#         print(f"WORKER {worker_id} seed:", np.random.get_state()[1][0])
-
-#     dataloader = torch.utils.data.DataLoader(
-#         dataset,
-#         batch_size=input_cfg.batch_size,
-#         shuffle=False,
-#         num_workers=input_cfg.num_workers,
-#         pin_memory=False,
-#         collate_fn=merge_second_batch,
-#         worker_init_fn=_worker_init_fn,
-#         drop_last= True)
-
-#     eval_dataloader = torch.utils.data.DataLoader(
-#         eval_dataset,
-#         batch_size=eval_input_cfg.batch_size,
-#         shuffle=False,
-#         num_workers=eval_input_cfg.num_workers,
-#         pin_memory=False,
-#         collate_fn=merge_second_batch,
-#         drop_last = True)
-
-
-#     data_iter = iter(dataloader)
-
-#     ######################
-#     # TRAINING
-#     ######################
-#     focal_loss = SigmoidFocalClassificationLoss()
-#     cls_loss_sum = 0
-#     training_detail = []
-#     log_path = model_dir / 'log.txt'
-#     training_detail_path = model_dir / 'log.json'
-#     if training_detail_path.exists():
-#         with open(training_detail_path, 'r') as f:
-#             training_detail = json.load(f)
-#     logf = open(log_path, 'a')
-#     logf.write(proto_str)
-#     logf.write("\n")
-#     summary_dir = model_dir / 'summary'
-#     summary_dir.mkdir(parents=True, exist_ok=True)
-#     writer = SummaryWriter(str(summary_dir))
-#     total_step_elapsed = 0
-#     remain_steps = train_cfg.steps - net.get_global_step()
-#     t = time.time()
-#     ckpt_start_time = t
-#     total_loop = train_cfg.steps // train_cfg.steps_per_eval + 1
-#     #print("steps, steps_per_eval, total_loop:", train_cfg.steps, train_cfg.steps_per_eval, total_loop)
-#     # total_loop = remain_steps // train_cfg.steps_per_eval + 1
-#     clear_metrics_every_epoch = train_cfg.clear_metrics_every_epoch
-#     net.set_global_step(torch.tensor([0]))
-#     if train_cfg.steps % train_cfg.steps_per_eval == 0:
-#         total_loop -= 1
-#     mixed_optimizer.zero_grad()
-#     try:
-#         print('Total loop(# epochs):', total_loop)
-#         for _ in range(total_loop):
-#             if total_step_elapsed + train_cfg.steps_per_eval > train_cfg.steps:
-#                 steps = train_cfg.steps % train_cfg.steps_per_eval
-#             else:
-#                 steps = train_cfg.steps_per_eval
-            
-#             for step in range(steps):
-#                 lr_scheduler.step(net.get_global_step())
-#                 try:
-#                     example = next(data_iter)
-#                 except StopIteration:
-#                     print("end epoch")
-#                     if clear_metrics_every_epoch:
-#                         net.clear_metrics()
-#                     data_iter = iter(dataloader)
-#                     example = next(data_iter)
-#                 #if str(example['image_idx'][0]) in ["0000", "0001"]:
-#                 example_torch = example_convert_to_torch(example, float_dtype)
-#                 batch_size = example["anchors"].shape[0]
-#                 all_3d_output_camera_dict, all_3d_output, top_predictions, fusion_input,tensor_index, grid_tensor, grid_tensor_2D_index, grid_tensor_3D_index = net(example_torch,detection_2d_path)
-#                 layers_out_conv_lstm, last_state_list = conv_lstm(grid_tensor.cuda())
-#                 layers_out_conv_lstm = layers_out_conv_lstm[0].view(batch_size,4,5,18)
-                
-                    
-#                 #print(example_torch['image_idx'])
-#                 new_fusion_input = add_grid_features_to_sparse_tensor(fusion_input, tensor_index, layers_out_conv_lstm, grid_tensor_2D_index, grid_tensor_3D_index, batch_size)
-
-                
-#                 batch_flags = []
-#                 for i in range(batch_size):
-#                     cls_losses_reduced = 0
-#                     d3_gt_boxes = example_torch["d3_gt_boxes"][i]
-#                     d3_gt_boxes = torch.tensor(d3_gt_boxes, dtype=torch.float32, device=device).to(float_dtype)
-#                     #d3_gt_boxes = d3_gt_boxes.reshape(batch_size, d3_gt_boxes.shape[-1])
-#                     if (d3_gt_boxes[0,:] == np.float(-1)).all():   #if d3_gt_boxes.shape[0] == 0:
-#                         target_for_fusion = np.zeros((1,70400,1))
-#                         positives = torch.zeros(1,70400).type(torch.float32).cuda()
-#                         negatives = torch.zeros(1,70400).type(torch.float32).cuda()
-#                         negatives[:,:] = 1
-#                     else:
-#                         d3_gt_boxes_camera = box_torch_ops.box_lidar_to_camera(
-#                             d3_gt_boxes, example_torch['rect'][i,:], example_torch['Trv2c'][i,:])
-#                         d3_gt_boxes_camera_bev = d3_gt_boxes_camera[:,[0,2,3,5,6]]
-#                         ###### predicted bev boxes
-#                         pred_3d_box = all_3d_output_camera_dict[i]["box3d_camera"]
-#                         pred_bev_box = pred_3d_box[:,[0,2,3,5,6]]
-#                         #iou_bev = bev_box_overlap(d3_gt_boxes_camera_bev.detach().cpu().numpy(), pred_bev_box.detach().cpu().numpy(), criterion=-1)
-#                         iou_bev = d3_box_overlap(d3_gt_boxes_camera.detach().cpu().numpy(), pred_3d_box.squeeze().detach().cpu().numpy(), criterion=-1)
-#                         iou_bev_max = np.amax(iou_bev,axis=0)
-#                         #print(np.max(iou_bev_max))
-#                         basename_config = os.path.basename(config_path)
-#                         if basename_config == 'car.fhd.config':
-#                             target_for_fusion = ((iou_bev_max >= 0.7)*1).reshape(1,-1,1)
-
-#                             positive_index = ((iou_bev_max >= 0.7)*1).reshape(1,-1)
-#                             positives = torch.from_numpy(positive_index).type(torch.float32).cuda()
-#                             negative_index = ((iou_bev_max <= 0.5)*1).reshape(1,-1)
-#                             negatives = torch.from_numpy(negative_index).type(torch.float32).cuda()
-
-#                         else:
-#                             target_for_fusion = ((iou_bev_max >= 0.5)*1).reshape(1,-1,1)
-
-#                             positive_index = ((iou_bev_max >= 0.5)*1).reshape(1,-1)
-#                             positives = torch.from_numpy(positive_index).type(torch.float32).cuda()
-#                             negative_index = ((iou_bev_max <= 0.25)*1).reshape(1,-1)
-#                             negatives = torch.from_numpy(negative_index).type(torch.float32).cuda()
-
-#                     #cls_preds,flag = fusion_layer(fusion_input[i].cuda(),tensor_index[i].cuda())
-#                     cls_preds,flag = fusion_layer(new_fusion_input[i].cuda(),tensor_index[i].cuda()) 
-#                     one_hot_targets = torch.from_numpy(target_for_fusion).type(torch.float32).cuda()
-#                     negative_cls_weights = negatives.type(torch.float32) * 1.0
-#                     cls_weights = negative_cls_weights + 1.0 * positives.type(torch.float32)
-#                     pos_normalizer = positives.sum(1, keepdim=True).type(torch.float32)
-#                     cls_weights /= torch.clamp(pos_normalizer, min=1.0)
-#                     if flag==1:
-#                         cls_losses = focal_loss._compute_loss(cls_preds, one_hot_targets, cls_weights.cuda())  # [N, M]
-#                         cls_losses_reduced = cls_losses.sum()/(example_torch['labels'].shape[0]/batch_size)
-#                         cls_loss_sum = cls_loss_sum + cls_losses_reduced
-#                         if train_cfg.enable_mixed_precision:
-#                             loss *= loss_scale
-#                         cls_losses_reduced.backward()
-#                         mixed_optimizer.step()
-#                         mixed_optimizer.zero_grad()
-#                     net.update_global_step()
-#                     step_time = (time.time() - t)
-#                     t = time.time()
-#                     metrics = {}
-#                     global_step = net.get_global_step()
-#                     if global_step % display_step == 0:
-#                         print("now it is",global_step,"steps", " and the cls_loss is :",cls_loss_sum/display_step,
-#                         "learning_rate: ",float(optimizer.lr),file=logf)
-#                         print("now it is",global_step,"steps", " and the cls_loss is :",cls_loss_sum/display_step,
-#                         "learning_rate: ",float(optimizer.lr))
-#                         writer.add_scalar('training loss', cls_loss_sum/display_step, global_step)
-#                         cls_loss_sum = 0
-
-#                     ckpt_elasped_time = time.time() - ckpt_start_time
-
-#                     if ckpt_elasped_time > train_cfg.save_checkpoints_secs:
-#                         torchplus.train.save_models(model_dir, [fusion_layer, optimizer],
-#                                                     net.get_global_step())
-#                         torchplus.train.save_models(model_dir, [conv_lstm],
-#                                     net.get_global_step())
-
-#                         ckpt_start_time = time.time()
-
-#             total_step_elapsed += steps
-
-#             torchplus.train.save_models(model_dir, [fusion_layer, optimizer],
-#                                         net.get_global_step())
-#             torchplus.train.save_models(model_dir, [conv_lstm],
-#                                     net.get_global_step())
-
-#             print('end epoch')
-#             fusion_layer.eval()
-#             net.eval()
-#             conv_lstm.eval()
-#             result_path_step = result_path / f"step_{net.get_global_step()}"
-#             result_path_step.mkdir(parents=True, exist_ok=True)
-#             print("#################################")
-#             print("#################################", file=logf)
-#             print("# EVAL")
-#             print("# EVAL", file=logf)
-#             print("#################################")
-#             print("#################################", file=logf)
-#             print("Generate output labels...")
-#             print("Generate output labels...", file=logf)
-#             t = time.time()
-#             dt_annos = []
-#             prog_bar = ProgressBar()
-#             net.clear_timer()
-#             prog_bar.start((len(eval_dataset) + eval_input_cfg.batch_size - 1) // eval_input_cfg.batch_size)
-#             val_loss_final = 0
-#             for example in iter(eval_dataloader):
-#                 # if str(example['image_idx'][0]) in ["4191", "4192", "4193", "4194", "4195", "4196", "4197", "4198", 
-#                 # "4199" ,"4200"]:
-#                 example = example_convert_to_torch(example, float_dtype)
-#                 if pickle_result:
-#                     dt_annos_i, val_losses = predict_kitti_to_anno(
-#                         net, detection_2d_path, fusion_layer, conv_lstm, example, class_names, center_limit_range,
-#                         model_cfg.lidar_input)
-#                     dt_annos+= dt_annos_i
-#                     val_loss_final = val_loss_final + val_losses
-#                 else:
-#                     _predict_kitti_to_file(net, detection_2d_path, fusion_layer, conv_lstm, example, result_path_step,
-#                                         class_names, center_limit_range,
-#                                         model_cfg.lidar_input)
-
-#                     prog_bar.print_bar()
-
-#             sec_per_ex = len(eval_dataset) / (time.time() - t)
-#             print("validation_loss:", val_loss_final/len(eval_dataloader))
-#             print("validation_loss:", val_loss_final/len(eval_dataloader),file=logf)
-#             print(f'generate label finished({sec_per_ex:.2f}/s). start eval:')
-#             print(
-#                 f'generate label finished({sec_per_ex:.2f}/s). start eval:',
-#                 file=logf)
-
-#             # gt_annos = [
-#             #     info["annos"]  for info in eval_dataset.dataset.kitti_infos if str(info['image']['image_idx']) in ["4191", "4192", "4193", "4194", "4195", "4196", "4197", "4198", 
-#             #     "4199" ,"4200"]
-#             # ]
-#             gt_annos = [
-#                 info["annos"] for info in eval_dataset.dataset.kitti_infos
-#             ]
-#             if not pickle_result:
-#                 dt_annos = kitti.get_label_annos(result_path_step)
-#             # result = get_official_eval_result_v2(gt_annos, dt_annos, class_names)
-#             gt_annos = gt_annos[:len(dt_annos)]
-#             result = get_official_eval_result(gt_annos, dt_annos, class_names)
-#             print(result, file=logf)
-#             print(result)
-#             writer.add_text('eval_result', json.dumps(result, indent=2), global_step)
-#             result = get_coco_eval_result(gt_annos, dt_annos, class_names)
-#             print(result, file=logf)
-#             print(result)
-#             if pickle_result:
-#                 with open(result_path_step / "result.pkl", 'wb') as f:
-#                     pickle.dump(dt_annos, f)
-#             writer.add_text('eval_result', result, global_step)
-#             #net.train()
-#             fusion_layer.train()
-#             conv_lstm.train()
-#     except Exception as e:
-
-#         torchplus.train.save_models(model_dir, [fusion_layer, optimizer],
-#                                     net.get_global_step())
-
-#         logf.close()
-#         raise e
-#     # save model before exit
-
-#     torchplus.train.save_models(model_dir, [fusion_layer, optimizer],
-#                                 net.get_global_step())
-#     torchplus.train.save_models(model_dir, [conv_lstm],
-#                                 net.get_global_step())
-
-#     logf.close()
 
 def train(config_path,
           model_dir,
@@ -491,14 +149,18 @@ def train(config_path,
     class_names = target_assigner.classes
     grid_input_channels = 4
     grid_seq_len = 4
-    grid_frame_size = [5, 18] # gride frame ht * width
+    grid_frame_size= {
+        'columns': 36,
+        'rows': 5
+    }
+    #grid_frame_size = [5, 18] # gride frame ht * width
 
 
     net = build_inference_net(config_path,model_dir)
     fusion_layer = fusion.fusion()
     fusion_layer.cuda()
     conv_lstm = convlstm.ConvLSTM(input_dim=grid_input_channels, hidden_dim= grid_seq_len, kernel_size=(3,3), num_layers=2, 
-                                  frame_size=grid_frame_size, batch_first=True, bias=True, return_all_layers=False)
+                                  frame_size=[grid_frame_size['rows'],grid_frame_size['columns']], batch_first=True, bias=True, return_all_layers=False)
     conv_lstm.cuda()
     # ############ Anirban: restore parameters for fusion layer
     #print("load existing model for fusion layer")
@@ -616,9 +278,9 @@ def train(config_path,
                 #if str(example['image_idx'][0]) in ["0000", "0001"]:
                 example_torch = example_convert_to_torch(example, float_dtype)
                 batch_size = example["anchors"].shape[0]
-                all_3d_output_camera_dict, all_3d_output, top_predictions, fusion_input,tensor_index, grid_tensor, grid_tensor_2D_index, grid_tensor_3D_index = net(example_torch,detection_2d_path)
+                all_3d_output_camera_dict, all_3d_output, top_predictions, fusion_input,tensor_index, grid_tensor, grid_tensor_2D_index, grid_tensor_3D_index = net(example_torch,detection_2d_path, grid_frame_size)
                 layers_out_conv_lstm, last_state_list = conv_lstm(grid_tensor.cuda())
-                layers_out_conv_lstm = layers_out_conv_lstm[0].view(batch_size,4,5,18)
+                layers_out_conv_lstm = layers_out_conv_lstm[0].view(batch_size,4, grid_frame_size['rows'], grid_frame_size['columns']) #reshape (2,4,5,18)
                 
                     
                 #print(example_torch['image_idx'])
@@ -742,13 +404,13 @@ def train(config_path,
                 if pickle_result:
                     dt_annos_i, val_losses = predict_kitti_to_anno(
                         net, detection_2d_path, fusion_layer, conv_lstm, example, class_names, center_limit_range,
-                        model_cfg.lidar_input)
+                        model_cfg.lidar_input, grid_frame_size)
                     dt_annos+= dt_annos_i
                     val_loss_final = val_loss_final + val_losses
                 else:
                     _predict_kitti_to_file(net, detection_2d_path, fusion_layer, conv_lstm, example, result_path_step,
                                         class_names, center_limit_range,
-                                        model_cfg.lidar_input)
+                                        model_cfg.lidar_input, grid_frame_size)
 
                     prog_bar.print_bar()
 
@@ -910,16 +572,17 @@ def _predict_kitti_to_file(net,
                            result_save_path,
                            class_names,
                            center_limit_range=None,
-                           lidar_input=False):
+                           lidar_input=False,
+                           grid_size=None):
     batch_image_shape = example['image_shape']
     batch_imgidx = example['image_idx']
 
     # Anirban : added to process LSTM and multiple batch_size
     batch_size = example["anchors"].shape[0]
     # all_3d_output_camera_dict, all_3d_output, top_predictions, fusion_input,torch_index = net(example,detection_2d_path)
-    all_3d_output_camera_dict, all_3d_output, top_predictions, fusion_input,torch_index, grid_tensor, grid_tensor_2D_index, grid_tensor_3D_index = net(example,detection_2d_path)
+    all_3d_output_camera_dict, all_3d_output, top_predictions, fusion_input,torch_index, grid_tensor, grid_tensor_2D_index, grid_tensor_3D_index = net(example,detection_2d_path, grid_size)
     layers_out_conv_lstm, last_state_list = conv_lstm(grid_tensor.cuda())
-    layers_out_conv_lstm = layers_out_conv_lstm[0].view(batch_size,4,5,18)
+    layers_out_conv_lstm = layers_out_conv_lstm[0].view(batch_size,4,grid_size['rows'], grid_size['columns'])  #reshape (2,4,5,18)
     new_fusion_input = add_grid_features_to_sparse_tensor(fusion_input, torch_index, layers_out_conv_lstm, grid_tensor_2D_index, grid_tensor_3D_index, batch_size)
 
     # cls_losses_reduced = 0
@@ -994,7 +657,8 @@ def predict_kitti_to_anno(net,
                           class_names,
                           center_limit_range=None,
                           lidar_input=False,
-                          global_set=None):
+                          global_set=None,
+                          grid_size=None):
     focal_loss_val = SigmoidFocalClassificationLoss()
     batch_image_shape = example['image_shape']
     batch_imgidx = example['image_idx']
@@ -1002,9 +666,9 @@ def predict_kitti_to_anno(net,
 
     # Anirban : added to process LSTM and multiple batch_size
     batch_size = example["anchors"].shape[0]
-    all_3d_output_camera_dict, all_3d_output, top_predictions, fusion_input,torch_index, grid_tensor, grid_tensor_2D_index, grid_tensor_3D_index = net(example,detection_2d_path)
+    all_3d_output_camera_dict, all_3d_output, top_predictions, fusion_input,torch_index, grid_tensor, grid_tensor_2D_index, grid_tensor_3D_index = net(example,detection_2d_path, grid_size)
     layers_out_conv_lstm, last_state_list = conv_lstm(grid_tensor.cuda())
-    layers_out_conv_lstm = layers_out_conv_lstm[0].view(batch_size,4,5,18)
+    layers_out_conv_lstm = layers_out_conv_lstm[0].view(batch_size,4,grid_size['rows'], grid_size['columns'])  #reshape (2,4,5,18)
     new_fusion_input = add_grid_features_to_sparse_tensor(fusion_input, torch_index, layers_out_conv_lstm, grid_tensor_2D_index, grid_tensor_3D_index, batch_size)
 
     fusion_cls_preds_batch = []

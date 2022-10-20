@@ -276,7 +276,7 @@ class VoxelNet(nn.Module):
     def get_global_step(self):
         return int(self.global_step.cpu().numpy()[0])
 
-    def forward(self, example,detection_2d_path):
+    def forward(self, example,detection_2d_path, grid_size):
         """module's forward should always accept dict and return loss.
         """
         voxels = example["voxels"]
@@ -409,14 +409,14 @@ class VoxelNet(nn.Module):
                 middle_predictions=f_detection_result[predicted_class_index,:].reshape(-1,5)
                 top_predictions=middle_predictions[np.where(middle_predictions[:,4]>=-100)]
                 top_predictions_list.append(top_predictions)
-            res, iou_test, tensor_index, grid_tensor, grid_tensor_2D_index, grid_tensor_3D_index = self.train_stage_2(example, preds_dict,top_predictions_list)
+            res, iou_test, tensor_index, grid_tensor, grid_tensor_2D_index, grid_tensor_3D_index = self.train_stage_2(example, preds_dict,top_predictions_list, grid_size)
             self.end_timer("predict")
 
             return res, preds_dict, top_predictions, iou_test, tensor_index, grid_tensor, grid_tensor_2D_index, grid_tensor_3D_index
 
 
 
-    def train_stage_2(self, example, preds_dict,top_predictions_list):
+    def train_stage_2(self, example, preds_dict,top_predictions_list, grid_size):
         t = time.time()
         batch_size = example['anchors'].shape[0]
         batch_anchors = example["anchors"].view(batch_size, -1, 7)
@@ -566,8 +566,8 @@ class VoxelNet(nn.Module):
 
             #Anirban create map of image grid and 2D detections
             start = time.time()
-            grid_map_2D = self.create_image_grids(batch_image_shape, type=box_2d_preds.detach().cpu().numpy().dtype)#grid.copy() #18x5x6 dim nparray
-            grid_map_3D = self.create_image_grids(batch_image_shape, type=box_2d_preds.detach().cpu().numpy().dtype)#grid.copy() #18x5x6 dim nparray
+            grid_map_2D = self.create_image_grids(grid_size, batch_image_shape, type=box_2d_preds.detach().cpu().numpy().dtype)#grid.copy() #18x5x6 dim nparray
+            grid_map_3D = self.create_image_grids(grid_size, batch_image_shape, type=box_2d_preds.detach().cpu().numpy().dtype)#grid.copy() #18x5x6 dim nparray
 
             
             grid_map_2D = se.build_LSTM_stage_training(box_2d_detector, grid_map_2D, -1, box_2d_scores, bbox_type= '2D')
@@ -582,7 +582,7 @@ class VoxelNet(nn.Module):
 
             combined_grid = np.concatenate((grid_map_2D[:,:, 4:], grid_map_3D[:, :, 4:]), axis=2) #merge the 2 grid's ios and score features columnwise
             combined_grid_tensor = torch.FloatTensor(combined_grid) # 18x5x4 dim tensor
-            combined_grid_tensor = combined_grid_tensor.view(4, 5, 18)
+            combined_grid_tensor = combined_grid_tensor.view(4, grid_size['rows'], grid_size['columns']) #reshape to (4x5x18) 5 and 18 are grid cols and rows
             combined_grid_tensor_batch.append(combined_grid_tensor) #Anirban
 
             grid_tensor_index_2D_batch.append(torch.LongTensor(grid_list_index_2D_bbox).cuda())
@@ -593,12 +593,12 @@ class VoxelNet(nn.Module):
 
         #Anirban: return predictions_dicts, non_empty_iou_test_tensor, non_empty_tensor_index_tensor
         combined_grid_tensor_batch = torch.stack(combined_grid_tensor_batch) # stacking all the tensors per batch to create Tensor: (8, 4, 5, 18) batch x chnanels x ht x wt
-        combined_grid_tensor_batch = combined_grid_tensor_batch.view(2, 4, 4, 5, 18) # tensor reshape to shape(2, 4, 4, 5, 18) batch x seq x chnanels x ht x wt
+        combined_grid_tensor_batch = combined_grid_tensor_batch.view(2, 4, 4, grid_size['rows'], grid_size['columns']) # tensor reshape to shape(2, 4, 4, 5, 18) batch x seq x chnanels x ht x wt
 
         return predictions_dicts, non_empty_iou_test_tensor_batch, non_empty_tensor_index_tensor_batch, combined_grid_tensor_batch, grid_tensor_index_2D_batch, grid_tensor_index_3D_batch
 
     #Anirban
-    def create_image_grids(self, batch_image_shape, type):
+    def create_image_grids(self, grid_size, batch_image_shape, type):
         """generate 18x5 image grids each grids of equal size 69px by 75px
 
         Args:
@@ -611,7 +611,7 @@ class VoxelNet(nn.Module):
         grid_height = img_height//5
         left, top, right, bottom = 0, 0, grid_width, grid_height 
         # create a grid of (left, top, right, bottom, IOU, score) # IOU and score initialized to 0
-        grid= [[[(left+ grid_width*i), (top+ grid_height*j), (right+ grid_width*i), (bottom+ grid_height*j), 0, 0]  for j in range(5)] for i in range(18)] 
+        grid= [[[(left+ grid_width*i), (top+ grid_height*j), (right+ grid_width*i), (bottom+ grid_height*j), 0, 0]  for j in range(grid_size['rows'])] for i in range(grid_size['columns'])]  #for loop for (5,18) grid
         grid = np.array(grid, dtype= type)
 
         return grid
