@@ -12,7 +12,7 @@ from google.protobuf import text_format
 from tensorboardX import SummaryWriter
 import sys
 #append path of CLOCS source code
-sys.path.append('/private_shared/CLOCs_Source_Code/Common_Code/CLOCS-MasterThesis/CLOCs-master/')
+sys.path.append('/private_shared/CLOCS_Source_Code_New/Common_Code/CLOCS-MasterThesis/CLOCs-master/')
 #print(sys.modules)
 import torchplus
 import second.data.kitti_common as kitti
