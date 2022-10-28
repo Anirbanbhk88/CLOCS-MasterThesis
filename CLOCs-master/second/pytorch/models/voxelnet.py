@@ -607,8 +607,8 @@ class VoxelNet(nn.Module):
         img_height = batch_image_shape[0,0] #375
         img_width = batch_image_shape[0,1] #1242
         #splitting the images into 18x5 grids
-        grid_width = img_width//18
-        grid_height = img_height//5
+        grid_width = img_width//grid_size['rows']
+        grid_height = img_height//grid_size['columns']
         left, top, right, bottom = 0, 0, grid_width, grid_height 
         # create a grid of (left, top, right, bottom, IOU, score) # IOU and score initialized to 0
         grid= [[[(left+ grid_width*i), (top+ grid_height*j), (right+ grid_width*i), (bottom+ grid_height*j), 0, 0]  for j in range(grid_size['rows'])] for i in range(grid_size['columns'])]  #for loop for (5,18) grid

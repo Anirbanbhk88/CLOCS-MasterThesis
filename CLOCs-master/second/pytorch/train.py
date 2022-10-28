@@ -148,10 +148,10 @@ def train(config_path,
                                                     bv_range, box_coder)
     class_names = target_assigner.classes
     grid_input_channels = 4
-    grid_seq_len = 4
+    convlstm_seq_len = 4
     grid_frame_size= {
         'columns': 36,
-        'rows': 5
+        'rows': 10
     }
     #grid_frame_size = [5, 18] # gride frame ht * width
 
@@ -159,7 +159,7 @@ def train(config_path,
     net = build_inference_net(config_path,model_dir)
     fusion_layer = fusion.fusion()
     fusion_layer.cuda()
-    conv_lstm = convlstm.ConvLSTM(input_dim=grid_input_channels, hidden_dim= grid_seq_len, kernel_size=(3,3), num_layers=2, 
+    conv_lstm = convlstm.ConvLSTM(input_dim=grid_input_channels, hidden_dim= convlstm_seq_len, kernel_size=(3,3), num_layers=2, 
                                   frame_size=[grid_frame_size['rows'],grid_frame_size['columns']], batch_first=True, bias=True, return_all_layers=False)
     conv_lstm.cuda()
     # ############ Anirban: restore parameters for fusion layer
